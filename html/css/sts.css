@@ -1,0 +1,172 @@
+/*
+ *
+ * CSS Template for Semantic Table Sorter
+ *
+ * Version 0.1.0
+ * Dean M. Rantala <deanrantala@gmail.com>
+ *
+ */
+
+table.sts {
+
+}
+
+table.sts thead {
+
+}
+
+/* Applied to all <th>'s */
+table.sts thead tr th {
+
+}
+
+/* Applied to sortable <th>'s */
+table.sts thead tr th.sortable {
+	padding-right: 15px;
+	background-image: url(black-unsorted.gif);
+	background-repeat: no-repeat;
+	background-position: right 3px top 10px;
+	cursor: pointer;
+	cursor: hand;
+}
+
+/* Applied to non-sortable <th>'s */
+table.sts thead tr th.non-sortable {
+}
+
+/* Applied to <th> when sorted asc */
+table.sts thead tr th.sort-asc {
+	background-image: url(black-asc.gif);
+	background-position: right 3px top 10px;
+}
+
+/* Applied to <th> when sorted desc */
+table.sts thead tr th.sort-desc {
+	background-image: url(black-desc.gif);
+	background-position: right 3px top 10px;
+}
+
+table.sts tbody {
+
+}
+
+table.sts tbody tr {
+
+}
+
+table.sts tbody tr td {
+
+}
+
+table.sts tbody tr.row-even {
+	background-color: #efefef;
+}
+
+table.sts tbody tr.row-even td {
+
+}
+
+table.sts tbody tr.row-odd td {
+
+}
+
+/*
+ * The following shows how to target the ajax-loading tr/td.
+ *
+ * HOWEVER - If you are wanting to keep the table from "jumping"
+ * between pager switches, you probably want to statically set
+ * the height of the tr or td on a page-per-page basis - OR - set
+ * the height in a more application-specific way.  Setting it here
+ * will be GLOBAL, and you may not always have the same row count
+ * for all tables!
+ *
+ */
+table.sts tbody tr.ajax-load {
+
+}
+
+table.sts tbody tr.ajax-load td {
+	height: 100px;
+	vertical-align: middle;
+	text-align: center;
+}
+
+table.sts tbody tr.no-data {
+
+}
+
+
+/*
+ * And this is just like ajax loading, but for "no data to display"
+ * message tr/td.
+ */
+table.sts tbody tr.no-data td {
+	height: 100px;
+	vertical-align: middle;
+	text-align: center;
+}
+
+/* Pager container */
+.sts-pager {
+	display: inline-block;
+	margin-left: 5px;
+}
+
+.sts-pager .first, .sts-pager .prev{
+	height: 14px;
+	margin-right: 10px;
+	cursor: pointer;
+}
+/* "First page" button */
+.sts-pager .first{
+}
+/* "Prev page" button */
+.sts-pager .prev {
+}
+
+.sts-pager .last, .sts-pager .next{
+	height: 14px;
+	margin-left: 10px;
+	cursor: pointer;
+}
+/* "Last page" button */
+.sts-pager .last {
+}
+/* "Next page" button */
+.sts-pager .next {
+}
+
+/* "Page X of Y" text container */
+.sts-pager .page-text {
+
+}
+
+/* "Records X-Y of Z" text container */
+.sts-pager .row-text {
+
+}
+
+/* "Jump to" select */
+select.jump-to,
+.sts-pager select.jump-to {
+	/* added to reset the FoundationCSS global styles */
+	display: inline-block;
+	width: auto;
+	padding-right: 20px;
+    display: inline-block;
+    width: auto;
+    padding: 3px 20px 0px 7px;
+    margin: 0px;
+    height: 25px;
+}
+
+.sts-pager select.jump-to option {
+
+}
+
+
+
+
+
+
+
