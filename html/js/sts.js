@@ -1,69 +1,164 @@
-/*
- * The Semantic Table Sorter
- * sts - a simple table sorter
- * version 0.1 by Dean Rantala
- * <deanrantala@gmail.com>
- * @todo: documentation!!!!
- */			
 $(document).ready(function(){
 
-    var sts = function(table) {
+    /*
+     * @file A Simple Table Sorter - STS (aliased as TS)
+     * @version 0.1.1
+     * @author Dean M. Rantala <deanrantala@gmail.com>
+     * @copyright GNU General Public License, Version 3
+     */
 
+    var sts = function(table) {
+        
+        var sts_obj = this;
+        var sts_id = false;
+        var table_obj = table;
+        
+        /*
+         * All settings that follow can be set via the $.sts() constructor, OR by attaching each
+         * to a data-* attribute.  For example, to configure rows_per_page, you can add a data-rows_per_page="20"
+         * to your table.
+         * 
+         */
         var settings = {
-            ajax_url: false,
-            rows_per_page: 15,
-            total_pages: false,
-            page: 1,
-            sort_on: 1,
-            sort_order: 'asc'
+            ajax_url: false,                // The URL to use for ajax requests
+            rows_per_page: 15,              // How many rows do you wish to display per-page?
+            total_pages: false,             // Generally used internally, do not mess with this unless you know what you are doing
+            total_rows: false,              // Used internally
+            page: 1,                        // Default page to start at
+            sort_on: 1,                     // Default column to sort on (columns are indexed starting at "1"!)
+            sort_order: 'asc',              // Default sort order
+            autohide_pager: true,           // If the total result set is less than the configured rows_per_page, do you want the pager automatically hidden?
+            disable_pager: false,           // If true, only the sorting is enabled, and pagination is disabled
+            on_ajax_begin: false,           // If using ajax mode, this callback will be executed before the ajax call starts
+            on_ajax_complete: false,        // If using ajax mode, this callback will be executed when the ajax is done, and all data is rendered
+            persist_on_bottom_class: false, // All <tr>'s with the class defined here will always be forced/visible on the bottom of the table
+            template_source: false,         // Handlebars template source
+            template_function: false        // Handlebars pre-compiled template object
         };
         
         var ajax_loading = false;
+        
+        this.set_option = function(key,value) {
+            settings[key] = value;
+        };
+        
+        this.get_option = function(key) {
+            if(typeof settings[key] != 'undefined') {
+                return settings[key];
+            } else {
+                console.log('STS error: settings key \''+key+'\' does not exist!');
+            }
+        }
 
-        this.init = function() {
-            $(table).addClass('sts')
-            for(var k in settings) {
-                if( $(table).attr('data-'+k)!==undefined ) {
-                    settings[k] = $(table).attr('data-'+k);
+        /*
+         * Initialize the table sorter
+         * @param {object} options
+         * @returns {void}
+         */
+        this.init = function(options=false) {
+
+            sts_id = $(table_obj).attr('id');
+            
+            $(table_obj).addClass('sts');
+            
+            if(typeof options === 'object')
+            {
+                for(var k in options) {
+                    if(options.hasOwnProperty(k)) {
+                        sts_obj.set_option(k,options[k]);
+                    }
                 }
+            }
+
+            if(settings.disable_pager===true)
+            {
+                settings.rows_per_page = 100000000;
+            }
+           
+            if(settings.ajax_url===false && parseInt(settings.rows_per_page,10)===0) {
+                settings.rows_per_page = $(table_obj).find('tbody tr:not([data-exclude])').length;
             }
             
             if(settings.ajax_url!==false && isNaN(settings.sort_on)===false) {
                 var i = 1;
-                $(table).find('thead th').each(function(){
+                $(table_obj).find('thead th').each(function(){
                     if( i===parseInt(settings.sort_on) ) {
-                        settings.sort_on = $(this).attr('data-column');
+                        sts_obj.set_option('sort_on',$(this).attr('data-column'));
                     }
                     i++;
                 });
             }
+            settings.sort_order = settings.sort_order.toLowerCase();
             
-            if(settings.ajax_url===false) {
-                this.init_static();
-            } else {
-                this.init_ajax();
+            if(settings.rows_per_page==0) {
+                settings.rows_per_page = 1000000;
             }
-        }
+            
+            sts_obj.refresh(1);
+            
+        };
         
+        /*
+         * Destroy/remove sts instance from a table
+         * @returns {void}
+         */
+        this.destroy = function() {
+            // @todo: need to implement this, but it is currently not a hot item.
+        };
+        
+        /*
+         * Refresh the table sorter
+         * @param {number} page
+         * @returns {void}
+         */
+        this.refresh = function(page=null) {
+            if(page!==null && Number.isInteger(page)) {
+                settings.page = page;
+                sts_obj.update_pager_jump();
+            }
+            if(settings.ajax_url!==false) {
+                sts_obj.init_ajax();
+            } else {
+                sts_obj.init_static();
+            }            
+        };
+        
+        
+
+        /*
+         * Initialization routine if this is an ajax-paging table
+         * @returns {void}
+         */
         this.init_ajax = function() {
             this.load_ajax();
             this.init_headers();
             this.init_pagers();
-        }
-        
+        };
+
+        /**
+         * Initialization routine if this is a static (non-ajax-paging) table
+         * @returns {void}
+         */
         this.init_static = function() {
             this.sort();
             this.init_headers();
             this.init_pagers();
-        }
+        };
         
+        /**
+         * Initialize the headers for each instance (attach click events, etc)
+         * @returns {void}
+         */
         this.init_headers = function() {
             i = 1;
-            $(table).find('thead th').each(function(){
+            $(table_obj).find('thead tr:not([data-exclude]) th').each(function(){
+                
                 if(settings.ajax_url===false) {
                     $(this).attr('data-column',i);
                 }
                 if($(this).attr('data-no-sort')===undefined) {
+                    // First, clear any existing event handlers
+                    $(this).off();
                     $(this).click(function(){
                         if(ajax_loading===true) {
                             return false;
@@ -81,79 +176,110 @@ $(document).ready(function(){
                         settings.sort_on = col;
                         settings.page = 1;
                         if(settings.ajax_url===false) {
-                            $(table).data('sts').sort();
+                            sts_obj.sort();
                         } else {
-                            $(table).data('sts').load_ajax();
+                            sts_obj.load_ajax();
                         }
                     });
                 }
                 i++;
             });
-        }
+        };
         
-        this.init_pagers = function() {
-            var id = $(table).attr('id');
-            $('[data-pager='+id+']').each(function(){
+        /**
+         * Go to a specific page
+         * @param {number} page
+         * @returns {void}
+         */
+        this.goto_page = function(page) {
+            if(ajax_loading===true) {
+                return;
+            }
+            sts_obj.start_pager_loading_state();
+            if(Number.isInteger(page)) {
+                settings.page = page;
+                sts_obj.update_pager_jump();
+                if(settings.ajax_url===false) {
+                    sts_obj.sort();
+                } else {
+                    sts_obj.load_ajax();
+                }
+            } else {
+                console.log('Error: sts goto_page requires an integer value');
+            }
+        };
+        
+        /*
+         * Update the "jump to page" (if applicable)
+         * @returns {void}
+         */
+        this.update_pager_jump = function() {
+            $('[data-pager='+sts_id+'] select.jump-to').val(settings.page);
+        };
+
+        this.start_pager_loading_state = function() {
+            $('[data-pager='+sts_id+']').each(function(){
                 var pager = $(this);
+                var elements = $(pager).find('.first, .prev, .next, .last');
+                $(elements).attr('disabled','disabled');
+                $(elements).addClass('disabled');
+            });
+        }
+
+        /**
+         * Initialize each of the pager sets for this instance
+         * @returns {void}
+         */
+        this.init_pagers = function() {
+            
+            $('[data-pager='+sts_id+']').each(function(){
+                
+                var pager = $(this);
+                
+                // If the pager has already been initialized, there is nothing to do...
+                if($(pager).attr('data-pager-initialized')) {
+                    return true;
+                }
+                
+                $(pager).attr('data-pager-initialized',1);
                 $(pager).addClass('sts-pager');
+                
+                $(pager).find('.page-size').change(function(){
+                    sts_obj.set_option('autohide_pager',false);
+                    var rows_per_page = parseInt($(this).val(),10);
+                    $(pager).find('.page-size').val(rows_per_page);
+                    if(rows_per_page===0) {
+                        rows_per_page = settings.total_rows;
+                    }
+                    sts_obj.set_option('rows_per_page',rows_per_page);
+                    sts_obj.refresh(1);
+                });
+                
                 $(pager).find('.prev').click(function(){
-                    if(ajax_loading===true) {
-                        return false;
-                    }
                     if(settings.page>1) {
-                        settings.page--;
-                        $('[data-pager='+id+'] select.jump-to').val(settings.page);
-                        if(settings.ajax_url===false) {
-                            $(table).data('sts').sort();
-                        } else {
-                            $(table).data('sts').load_ajax();
-                        }
-                    }
-                });
-                $(pager).find('.next').click(function(){
-                    if(ajax_loading===true) {
-                        return false;
-                    }                    
-                    if(settings.page<settings.total_pages) {
-                        settings.page++;
-                        $('[data-pager='+id+'] select.jump-to').val(settings.page);
-                        if(settings.ajax_url===false) {
-                            $(table).data('sts').sort();
-                        } else {
-                            $(table).data('sts').load_ajax();
-                        }
-                    }
-                });
-                $(pager).find('.first').click(function(){
-                    if(ajax_loading===true) {
-                        return false;
-                    }                    
-                    if(settings.page>1) {
-                        settings.page = 1;
-                        $('[data-pager='+id+'] select.jump-to').val(settings.page);
-                        if(settings.ajax_url===false) {
-                            $(table).data('sts').sort();
-                        } else {
-                            $(table).data('sts').load_ajax();
-                        }
-                    }
-                });
-                $(pager).find('.last').click(function(){
-                    if(ajax_loading===true) {
-                        return false;
-                    }                    
-                    if(settings.page<settings.total_pages) {
-                        settings.page = settings.total_pages;
-                        $('[data-pager='+id+'] select.jump-to').val(settings.page);
-                        if(settings.ajax_url===false) {
-                            $(table).data('sts').sort();
-                        } else {
-                            $(table).data('sts').load_ajax();
-                        }
+                        sts_obj.goto_page(settings.page-1);
                     }
                 });
                 
-                $(pager).find('select.jump-to').each(function(){
+                $(pager).find('.next').click(function(){
+                    if(settings.page<settings.total_pages) {
+                        sts_obj.goto_page(settings.page+1);
+                    }
+                });
+                
+                $(pager).find('.first').click(function(){
+                    if(settings.page>1) {
+                        sts_obj.goto_page(1);
+                    }
+                });
+                
+                $(pager).find('.last').click(function(){
+                    if(settings.page<settings.total_pages) {
+                        sts_obj.goto_page(settings.total_pages);
+                    }
+                });
+                
+                $(pager).find('.jump-to').each(function(){
                     
                     var select = $(this);
                     if(settings.ajax_url===false) {
@@ -164,62 +290,92 @@ $(document).ready(function(){
                             $(select).append(opt);
                         }
                     }
-                        $(select).change(function(){
+                    $(select).change(function(){
                         if(ajax_loading===true) {
-                            return false;
-                        }                        
-                        console.log('Page jump initiated');
-                        settings.page = $(this).val();
-                        $('[data-pager='+id+'] select.jump-to').val(settings.page);
-                        if(settings.ajax_url===false) {
-                            $(table).data('sts').sort();
-                        } else {
-                            $(table).data('sts').load_ajax();
+                            $(this).val(settings.page);
                         }
+                        var newpage = $(this).val();
+                        sts_obj.goto_page(newpage);
+
                     });                    
                 });
             });
-        }
+        };
         
-        this.update_pagers = function(start_row,end_row,total_rows) {
-            var id = $(table).attr('id');
-            /*
-             * Update the "page X of Y" text
-             */
-            start_row++;
-            if(parseInt(end_row, 10)>parseInt(total_rows, 10)) {
-                end_row = total_rows;
+        /*
+         * Update the pagers (first, prev, next, last buttons and ensures jump-to-page select is correctly populated)
+         * @returns {void}
+         */
+        this.update_pagers = function() {
+            
+            if(parseInt(settings.end_row, 10)>parseInt(settings.total_rows, 10)) {
+                settings.end_row = settings.total_rows;
             }
-            $('[data-pager='+id+']').each(function(){
+
+            $('[data-pager='+sts_id+']').each(function(){
                 var pager = $(this);
-                $(pager).find('.page-text').html('Page ');
-                $(pager).find('.page-total').html(' of '+settings.total_pages);
-				$(pager).find('.row-text').html('Records '+start_row+' - '+end_row+' of '+total_rows);
-            });
-            if(settings.ajax_url!==false) {
-                var total_pages = Math.ceil(total_rows / settings.rows_per_page);
-                $('[data-pager='+id+'] select').each(function(){
-                    if(total_pages!==$(this).find('option').length) {
-                        $(this).html('');
-                        for(var i=1;i<=total_pages;i++) {
-                            var opt = document.createElement('OPTION');
-                            $(opt).html(i);
-                            $(opt).val(i);
-                            $(this).append(opt);                            
+                
+                if(parseInt(settings.total_rows,10)<=parseInt(settings.rows_per_page,10) && settings.autohide_pager===true) {
+                    // Hide the pager completely.
+                    $(pager).hide();
+                } else {
+                    $(pager).show();
+                    //console.log('total pages:'+settings.total_pages);
+                    if(settings.total_pages>1) {
+                        // Hide all buttons to the right?
+                        
+                        if(settings.page===settings.total_pages) {
+                            $(pager).find('.next, .last').addClass('disabled');
+                            $(pager).find('.next, .last').attr('disabled','disabled');
+                        } else {
+                            $(pager).find('.next, .prev, .first, .last').removeClass('disabled');
+                            $(pager).find('.next, .prev, .first, .last').removeAttr('disabled');
                         }
+                        // Hide all buttons to the left?
+                        if(settings.page===1) {
+                            $(pager).find('.prev, .first').addClass('disabled');
+                            $(pager).find('.prev, .first').attr('disabled','disabled');
+                        } else {
+                            $(pager).find('.prev, .first').removeClass('disabled');
+                            $(pager).find('.prev, .first').removeAttr('disabled');
+                        }
+                    } else {
+                        $(pager).find('.next, .prev, .first, .last').addClass('disabled');
+                        $(pager).find('.next, .prev, .first, .last').attr('disabled','disabled');
                     }
-                });                
-            }
-            // ADD JUMP-TO UPDATE LOGIC HERE IF AJAX MODE
-	    // Here we are many months after I wrote this and have no idea what I was going to do...
-        }
+                    // Update the DOM with some useful info about current status
+                    $(pager).find('.rows-per-page').val(settings.rows_per_page);
+                    $(pager).find('.current-page').html(settings.page);
+                    $(pager).find('.total-pages').html(settings.total_pages);
+                    $(pager).find('.start-record').html(settings.start_row+1);
+                    $(pager).find('.end-record').html(settings.end_row+1);
+                    $(pager).find('.total-records').html(settings.total_rows);
+                }
+            });
+            
+            // Populate the "jump to page" <select> object accordingly
+            $('[data-pager='+sts_id+'] select.jump-to').each(function(){
+                if(settings.total_pages!==$(this).find('option').length) {
+                    $(this).html('');
+                    for(var i=1;i<=settings.total_pages;i++) {
+                        var opt = document.createElement('OPTION');
+                        $(opt).html(i);
+                        $(opt).val(i);
+                        $(this).append(opt);                            
+                    }
+                }
+            });
+
+        };
         
+        /*
+         * Update the various meta data (classes and attributes) related to the <thead>/<th> elements
+         * @returns {void}
+         */
         this.update_th_meta = function() {
-        
-            /*
-             * Manage the <th> classes and attributes
-             */
-            $(table).find('thead th').each(function(){
+            //console.log('Updating th meta');
+            // Manage the sortable/non-sortable classes
+            $(table_obj).find('thead tr:not([data-exclude]) th').each(function(){
                 if($(this).attr('data-no-sort')===undefined) {
                     $(this).removeClass('non-sortable');
                     $(this).addClass('sortable');
@@ -228,24 +384,27 @@ $(document).ready(function(){
                     $(this).removeClass('sortable');
                 }
             });
-            $(table).find('thead th').removeAttr('data-sorted');
-            $(table).find('thead th').removeClass('sort-asc');
-            $(table).find('thead th').removeClass('sort-desc');
+            // Manage the data-sorted attributes and sort-asc/sort-desc classes
+            $(table_obj).find('thead tr:not([data-exclude]) th').removeAttr('data-sorted');
+            $(table_obj).find('thead tr:not([data-exclude]) th').removeClass('sort-asc sort-desc');
             if(settings.ajax_url===false) {
-                $(table).find('thead th:nth-child('+settings.sort_on+')').attr('data-sorted',1);
-                $(table).find('thead th:nth-child('+settings.sort_on+')').addClass('sort-'+settings.sort_order);
+                $(table_obj).find('thead tr:not([data-exclude]) th:nth-child('+settings.sort_on+')').attr('data-sorted',1);
+                $(table_obj).find('thead tr:not([data-exclude]) th:nth-child('+settings.sort_on+')').addClass('sort-'+settings.sort_order);
             } else {
-                $(table).find('thead th[data-column='+settings.sort_on+']').attr('data-sorted',1);
-                $(table).find('thead th[data-column='+settings.sort_on+']').addClass('sort-'+settings.sort_order);                
+                $(table_obj).find('thead tr:not([data-exclude]) th[data-column='+settings.sort_on+']').attr('data-sorted',1);
+                $(table_obj).find('thead tr:not([data-exclude]) th[data-column='+settings.sort_on+']').addClass('sort-'+settings.sort_order);                
             }
         
-        }
+        };
         
+        /*
+         * Update <tr> styles. 
+         * @returns {void}
+         */
         this.update_tr_styles = function() {
-            $(table).find('tbody tr').removeClass('row-even');
-            $(table).find('tbody tr').removeClass('row-odd');
+            $(table_obj).find('tbody tr:not([data-exclude])').removeClass('row-even row-odd');
             var i = 0;
-            $(table).find('tbody tr:visible').each(function(){
+            $(table_obj).find('tbody tr:visible:not([data-exclude])').each(function(){
                 if(i % 2) {
                     $(this).addClass('row-even');
                 } else {
@@ -253,95 +412,121 @@ $(document).ready(function(){
                 }
                 i++;                
             });
-        }
-
-		this.show_loading = function() {
-
-				var number_of_headers = $(table).find('thead th').length;
-				var table_html = '<tr class="ajax-load"><td colspan="'+number_of_headers+'">Loading...</td>';
-				$(table).find('tbody').html(table_html);
-		};
-        
+        };
+       
+        /*
+         * Load the data/page via ajax
+         * @returns {void}
+         */
         this.load_ajax = function() {
             
             ajax_loading = true;
             
-            var number_of_headers = $(table).find('thead th').length;
+            if(settings.on_ajax_begin!==false) {
+                settings.on_ajax_begin();
+            }
+            
+            
             
             /*
              * Logic to determine:
              * start_row and end_row (within the page)
              */
-            var start_row = 0;
-            var end_row = 0;
+            settings.start_row = 0;
+            settings.end_row = 0;
             if(settings.page===1) {
-                end_row = settings.rows_per_page;
+                settings.end_row = settings.rows_per_page;
             } else {
-                start_row = (settings.page-1) * settings.rows_per_page;
-                end_row = parseInt(start_row) + parseInt(settings.rows_per_page);
+                settings.start_row = (settings.page-1) * settings.rows_per_page;
+                settings.end_row = parseInt(settings.start_row) + parseInt(settings.rows_per_page);
             }
 
-            this.update_th_meta();
+            sts_obj.update_th_meta();
             
-            var url = settings.ajax_url+'/'+start_row+'/'+settings.rows_per_page+'/'+settings.sort_on+'/'+settings.sort_order;
-            console.log(url);
-            //return false;
+            var url = settings.ajax_url+'/'+settings.start_row+'/'+settings.rows_per_page+'/'+settings.sort_on+'/'+settings.sort_order;
+
             $.ajax({
                 type: 'GET',
                 url: url,
                 dataType: 'json',
                 success: function(response) {
-                    console.log(response);
-                    var table_id = $(table).attr('id');
-                    var tr_html = $('script[data-tr-template='+table_id+']').html();
-					/*
-					 * If a template was not found for each <tr>, we try our best
-					 * to generate one based on the <th>'s found in the header...
-					 */
-                    if(!tr_html) {
+                    
 
-                        tr_html = '<tr>';
-                        $(table).find('thead th').each(function(){
-                            tr_html += '<td>{'+$(this).attr('data-column')+'}</td>';
-                        });
-                        tr_html += '</tr>';
-                    }
-					// Time to loop over the records!!
-					var tbody = '';
-					for(var i=0;i<response.records.length;i++) {
-                        var tr = tr_html;
-						// ...and now over each column of each record
-						for(var c in response.records[i]) {
-							if(response.records[i].hasOwnProperty(c)) {
-								// For each column found, let's replace the template placeholder with the
-								// records column value...
-								tr = tr.replace(new RegExp('{'+c+'}','g'),response.records[i][c]);
-							}
-						}
-						// Now to append the newly-generated <tr> to the tbody
-						tbody += tr;
-                    }
-					$(table).find('tbody').html(tbody);
-					if(response.records.length==0) {
-					// If no data was returned, we include a single tr//td with the usual message...
-					$(table).find('tbody').append('<tr class="no-data"><td colspan="'+number_of_headers+'">No data to display</td></tr>');
-					}
-					// Few quick calculations to get the total pages, etc
-					settings.total_pages = Math.ceil(response.total / settings.rows_per_page);
-					$(table).data('sts').update_pagers(start_row,end_row,response.total);
-					$(table).data('sts').update_tr_styles();
+                    
+                    if(typeof response.total_rows === 'undefined') {
+                        console.log('Error: ajax response is not compatible, please check the returned data');
+                    } else {
+                        
+                        existing_md5 = '0';
+                        if($(table_obj).attr('data-md5')) {
+                            existing_md5 = $(table_obj).attr('data-md5');
+                        }
 
-					ajax_loading = false;
-				}
-			});
+                        new_md5 = '1';
+                        if(typeof response.md5 != 'undefined') {
+                            new_md5 = response.md5;
+                        }
+
+                        if(existing_md5!=new_md5) {
+                            settings.total_rows = response.total_rows;
+                            settings.total_pages = Math.ceil(response.total_rows / settings.rows_per_page);
+
+                            if(settings.template_function !== false) {
+                                $(table_obj).find('tbody').html(settings.template_function(response));
+                            } else {
+                                if(settings.template_source === false) {
+                                    //console.log('Looking for script');
+                                    var template_dom = $('script[data-template='+sts_id+']');
+                                    //console.log('Length: '+template_dom.length);
+                                    if(template_dom.length>0) {
+                                        //console.log($(template_dom[0]).html());
+                                        //settings.template_source
+                                        settings.template_source = $(template_dom[0]).html();
+                                        //console.log(settings.template_source);
+                                    }
+                                }
+                                if(settings.template_source!==false) {
+                                    if(typeof Handlebars !== 'undefined') {
+                                        settings.template_function = Handlebars.compile(settings.template_source);
+                                        $(table_obj).find('tbody').html(settings.template_function(response));
+                                    } else {
+                                        console.log('Handlebars template engine is required but was not found or loaded.');
+                                    }
+                                } else {
+                                    console.log('Unable to render response data: no template_function was provided. Additionally, the template_source was not provided nor was a <script data-template="'+sts_id+'"> found in the DOM');
+                                }
+                            }
+                            sts_obj.update_pagers();
+                            sts_obj.update_tr_styles();                            
+                        }
+
+                        if(new_md5!='1') {
+                            $(table_obj).attr('data-md5',new_md5);
+                        }
+                        
+
+                    }
+                    ajax_loading = false;
+                    
+                    if(settings.on_ajax_complete!==false) {
+                        settings.on_ajax_complete(response);
+                    }
+                    
+		},
+                error: function(jqXHR,status,error) {
+                    console.log('Error ('+status+') loading ajax resource: '+url);
+                }
+            });
         };
+        
         
         /*
          * Sorting method used for non-ajax data sets
+         * @returns {void}
          */
         this.sort = function() {
-  
-            this.update_th_meta();
+            
+            sts_obj.update_th_meta();
             
             // sortdata will hold the data we are sorting on
             var sortdata = [];
@@ -354,28 +539,37 @@ $(document).ready(function(){
              * 1) build a sortable array to index by
              * 2) detect the data type that we will sort on
              */
-            var i=0;
-            $(table).find('tbody tr').each(function(){
-                $(this).attr('data-order_index',i);
-                var value = $(this).find('td:nth-child('+settings.sort_on+')').html();
-                if(value!=='' && isNaN(value)===true) {
-                    data_type = 'string';
+            
+            var collection = $(table).find('tbody tr:not([data-exclude])').remove();
+            
+            for(var i=0;i<collection.length;i++) {
+                var td = $(collection[i]).find('td:nth-child('+settings.sort_on+')');
+                var dsr = $(td).attr('data-sort-value');
+                if(dsr) {
+                    collection[i]._sort_value = dsr;
+                } else {
+                    // The simple replace hack helps column that contain only percentile values
+                    collection[i]._sort_value = $(td).text().replace('%','');
                 }
-                sortdata.push({
-                    value: value,
-                    order_index: i
-                });
-                
-                i++;
-            });
+                if(collection[i]._sort_value!=='' && isNaN(collection[i]._sort_value)===true) {
+                    if(collection[i]._sort_value.match(/^\$/)) {
+                        data_type = 'money';
+                    } else {
+                        data_type = 'string';
+                    }
+                }
+            }
+
+            settings.total_rows = i;
             
             /*
              * Sorting logic for columns with strings
              */
             if(data_type==='string') {
-                sortdata.sort(function(a,b){
-                    var value_a = a.value.toUpperCase();
-                    var value_b = b.value.toUpperCase();
+                //console.log('Sorting string');
+                collection.sort(function(a,b){
+                    var value_a = a._sort_value.toUpperCase();
+                    var value_b = b._sort_value.toUpperCase();
                     if(settings.sort_order==='asc') {
                         return (value_a < value_b) ? -1 : (value_a > value_b) ? 1 : 0;
                     } else {
@@ -383,13 +577,29 @@ $(document).ready(function(){
                     }
                 });
             }
+            
             /*
              * Sorting logic for columns with numbers
              */
             if(data_type==='number') {
-                sortdata.sort(function(a,b){
-                    var value_a = parseFloat(a.value);
-                    var value_b = parseFloat(b.value);
+                collection.sort(function(a,b){
+                    var value_a = parseFloat(a._sort_value);
+                    var value_b = parseFloat(b._sort_value);
+                    if(settings.sort_order==='asc') {
+                        return (value_a < value_b) ? -1 : (value_a > value_b) ? 1 : 0;
+                    } else {
+                        return (value_a > value_b) ? -1 : (value_a < value_b) ? 1 : 0;
+                    }
+                });
+            }
+            
+            /*
+             * Sorting logic for columns with money values
+             */
+            if(data_type==='money') {
+                collection.sort(function(a,b){
+                    var value_a = parseFloat(a._sort_value.replace(/[^0-9\.]/g,''));
+                    var value_b = parseFloat(b._sort_value.replace(/[^0-9\.]/g,''));
                     if(settings.sort_order==='asc') {
                         return (value_a < value_b) ? -1 : (value_a > value_b) ? 1 : 0;
                     } else {
@@ -402,90 +612,93 @@ $(document).ready(function(){
              * Logic to determine:
              * start_row and end_row (within the page)
              */
-            var start_row = 0;
-            var end_row = sortdata.length;
+            settings.start_row = 0;
+            settings.end_row = collection.length;
             if(settings.rows_per_page!==false) {
-                settings.total_pages = Math.ceil(sortdata.length / settings.rows_per_page);
+                settings.total_pages = Math.ceil(collection.length / settings.rows_per_page);
                 if(settings.page===1) {
-                    end_row = settings.rows_per_page;
+                    settings.end_row = settings.rows_per_page;
                 } else {
-                    start_row = (settings.page-1) * settings.rows_per_page;
-                    end_row = parseInt(start_row) + parseInt(settings.rows_per_page);
+                    settings.start_row = (settings.page-1) * settings.rows_per_page;
+                    settings.end_row = parseInt(settings.start_row) + parseInt(settings.rows_per_page);
                 }
             }
-           
-            this.update_pagers(start_row,end_row,sortdata.length);
-
 
             /*
              * Re-order/rendering of the table rows
-             * -> All rows are re-ordered
-             * -> Rows outside the "current page" are hidden
-             * -> All even/odd rows are assigned classes
+             * -> We iterate over each <tr> and for each, we remove it from the DOM
+             * -> Rows within the "current page" are set to .show() and the <tr> re-inserted
+             * -> Rows outside the "current page" are set to .hide() and the <tr> and re-inserted
+             * -> If we have the "persist_on_bottom_class" defined, we remove that <tr>, set it to .show() and re-insert it at the BOTTOM
              */
-            //var even_odd = 0;
-            for(i=sortdata.length-1;i>=0;i--) {
-                var tr = $(table).find('tr[data-order_index='+sortdata[i].order_index+']').remove();
-                //$(tr).removeClass('row-even');
-                //$(tr).removeClass('row-odd')
-                if(i<start_row || i>=end_row) {
-                    $(tr).hide();
+            for(var i=0;i<collection.length;i++) {
+                if(i<settings.start_row || i>=settings.end_row) {
+                    $(collection[i]).hide();
                 } else {
-                    $(tr).show();
-                    /*
-                    if(even_odd % 2) {
-                        $(tr).addClass('row-even');
-                    } else {
-                        $(tr).addClass('row-odd');
-                    }
-                    even_odd++;
-                    */
-                }
-                
-                $(tr).removeAttr('order_index');
-                $(table).find('tbody').prepend(tr);
+                    $(collection[i]).show();
+                }                
+            }
+
+            $(table_obj).find('tbody').prepend(collection);
+            
+            if(settings.persist_on_bottom_class!==false) {
+                var tr = $(table).find('tr.'+settings.persist_on_bottom_class).remove();
+                $(table).find('tbody').append(tr);
             }
             
+            this.update_pagers();
             this.update_tr_styles();
 
-        }
+        };
 
-    }
+    };
 
     /*
-     * Initialize the table sort object in
-     * a jQuery way
+     * Initialize the table sort object
+     * @param {object|string} options - should be an object when instantiating new instance, string when calling methods
+     * @param {string} args - example: $('#mytable').sts('goto_page',2) or $('#mytable').sts('refresh');
+     * @returns {object} sts instance
      */
-    jQuery.fn.sts = function(argument) {
-            return this.each(function(){
-                    var table = $(this);
-                    if (table.data('sts')) {
-                            return;
+    jQuery.fn.sts = function(options={},args=null) {
+
+        if($(this).data('sts')) {
+            if(args===null) {
+                var obj = $(this).data('sts');
+                return obj.get_option(options);
+            }
+        }
+        
+        return this.each(function(){
+            var table_obj = $(this);
+            var sts_obj = null;
+            if (table_obj.data('sts')) {
+                //console.log('found data');
+                sts_obj = table_obj.data('sts');
+            } else {
+                sts_obj = new sts(table_obj);
+                table_obj.data('sts',sts_obj);
+            }
+            if(typeof options ==='object') {
+                sts_obj.init(options);
+            } else if(typeof options==='string') {
+                if(options==='refresh' || options==='reload') {
+                    sts_obj.refresh(args);
+                } else if(options==='goto' || options==='goto_page') {
+                    sts_obj.goto_page(args);
+                } else if(options==='destroy') {
+                    sts_obj.destroy();
+                } else {
+                    if(typeof sts_obj.settings[options] !== 'undefined') {
+                        sts_obj.set_option(options,args);
+                    } else {
+                        console.log('Invalid option passed to sts');
                     }
-                    var sts_obj = new sts(this);
-                    sts_obj.init();
-                    table.data('sts',sts_obj);
-            });
+                }
+            } else {
+                console.log('Invalid use of sts constructor');
+            }
+        });
     };
-
-    jQuery.fn.sts_refresh = function(argument) {
-	this.each(function(){
-	    var table = $(this);
-	    if(typeof table.data('sts') !='undefined') {
-	        table.data('sts').load_ajax();
-	    }
-	});
-    };
-
-    jQuery.fn.sts_loading = function(argument) {
-	this.each(function(){
-	    var table = $(this);
-	    if(typeof table.data('sts') !='undefined') {
-	        table.data('sts').show_loading();
-	    }
-	});
-    };
-
-
+  
 });
 

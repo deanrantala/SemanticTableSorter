@@ -22,10 +22,10 @@ table.sts thead tr th {
 
 /* Applied to sortable <th>'s */
 table.sts thead tr th.sortable {
-	padding-right: 15px;
+	padding-left: 16px;
 	background-image: url(black-unsorted.gif);
 	background-repeat: no-repeat;
-	background-position: right 3px top 10px;
+	background-position: 4px center;
 	cursor: pointer;
 	cursor: hand;
 }
@@ -37,13 +37,13 @@ table.sts thead tr th.non-sortable {
 /* Applied to <th> when sorted asc */
 table.sts thead tr th.sort-asc {
 	background-image: url(black-asc.gif);
-	background-position: right 3px top 10px;
+	/*background-position: left center;*/
 }
 
 /* Applied to <th> when sorted desc */
 table.sts thead tr th.sort-desc {
 	background-image: url(black-desc.gif);
-	background-position: right 3px top 10px;
+	/*background-position: left center;*/
 }
 
 table.sts tbody {
@@ -59,7 +59,8 @@ table.sts tbody tr td {
 }
 
 table.sts tbody tr.row-even {
-	background-color: #efefef;
+	/*background-color: #efefef;*/
+        /*background-color: rgba(0,0,0,.03);*/
 }
 
 table.sts tbody tr.row-even td {
@@ -85,7 +86,7 @@ table.sts tbody tr.ajax-load {
 
 }
 
-table.sts tbody tr.ajax-load td {
+table tbody tr.ajax-load td {
 	height: 100px;
 	vertical-align: middle;
 	text-align: center;
@@ -100,7 +101,7 @@ table.sts tbody tr.no-data {
  * And this is just like ajax loading, but for "no data to display"
  * message tr/td.
  */
-table.sts tbody tr.no-data td {
+table tbody tr.no-data td {
 	height: 100px;
 	vertical-align: middle;
 	text-align: center;
@@ -108,14 +109,11 @@ table.sts tbody tr.no-data td {
 
 /* Pager container */
 .sts-pager {
-	display: inline-block;
-	margin-left: 5px;
+    /*display: none;*/
+    text-align: right;
 }
 
 .sts-pager .first, .sts-pager .prev{
-	height: 14px;
-	margin-right: 10px;
-	cursor: pointer;
 }
 /* "First page" button */
 .sts-pager .first{
@@ -125,9 +123,6 @@ table.sts tbody tr.no-data td {
 }
 
 .sts-pager .last, .sts-pager .next{
-	height: 14px;
-	margin-left: 10px;
-	cursor: pointer;
 }
 /* "Last page" button */
 .sts-pager .last {
@@ -149,15 +144,7 @@ table.sts tbody tr.no-data td {
 /* "Jump to" select */
 select.jump-to,
 .sts-pager select.jump-to {
-	/* added to reset the FoundationCSS global styles */
-	display: inline-block;
-	width: auto;
-	padding-right: 20px;
-    display: inline-block;
-    width: auto;
-    padding: 3px 20px 0px 7px;
-    margin: 0px;
-    height: 25px;
+
 }
 
 .sts-pager select.jump-to option {
